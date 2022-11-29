@@ -44,24 +44,24 @@ if verbose > 0:
     print("Arguments: ", args)
 
 
-def save_image(S, name, transform=None, crs=None):
+def save_image(data, name, transform=None, crs=None):
     # creation d'une image
     with rasterio.open(name, 'w', driver='GTiff',
-                       height=S.shape[0],
-                       width=S.shape[1],
+                       height=data.shape[0],
+                       width=data.shape[1],
                        count=1,
-                       dtype=S.dtype,
+                       dtype=data.dtype,
                        transform=transform,
                        crs=crs
                        ) as dst:
-        dst.write(S, 1)
+        dst.write(data, 1)
 
 
-def super_pixels(O, cell_size):
-    gradient = np.amax([np.abs(sobel(O[i])) for i in range(O.shape[0])],
+def super_pixels(ortho, cell_size):
+    gradient = np.amax([np.abs(sobel(ortho[i])) for i in range(ortho.shape[0])],
                        axis=0)
     regions = watershed(gradient,
-                        markers=O.shape[1] * O.shape[2] / cell_size,
+                        markers=ortho.shape[1] * ortho.shape[2] / cell_size,
                         compactness=0.001)
     uniques, inverses, counts = np.unique(regions,
                                           return_inverse=True,
@@ -167,11 +167,11 @@ def cout_int(scores, constraint, inside_indices):
     return score_int
 
 
-def export_result_with_ortho(O, regions, result, filename, selected_opi, transform, crs):
+def export_result_with_ortho(ortho, regions, result, filename, selected_opi, transform, crs):
     R = regions.flatten().tolist()
-    OPI = [O[i].flatten().tolist() for i in range(O.shape[0])]
-    out_G = [None] * (O.shape[1] * O.shape[2])
-    out_O = [None] * (O.shape[1] * O.shape[2])
+    OPI = [ortho[i].flatten().tolist() for i in range(ortho.shape[0])]
+    out_G = [None] * (ortho.shape[1] * ortho.shape[2])
+    out_O = [None] * (ortho.shape[1] * ortho.shape[2])
     index = 0
     if selected_opi is None:
         for i_R in R:
@@ -185,10 +185,10 @@ def export_result_with_ortho(O, regions, result, filename, selected_opi, transfo
             out_G[index] = selected_opi[o]
             out_O[index] = OPI[o][index]
             index += 1
-    save_image(np.array(out_G).astype(np.uint8).reshape((O.shape[1], O.shape[2])),
+    save_image(np.array(out_G).astype(np.uint8).reshape((ortho.shape[1], ortho.shape[2])),
                filename+"_graph.tif",
                transform, crs)
-    save_image(np.array(out_O).astype(np.uint8).reshape((O.shape[1], O.shape[2])),
+    save_image(np.array(out_O).astype(np.uint8).reshape((ortho.shape[1], ortho.shape[2])),
                filename+"_ortho.tif",
                transform, crs)
 
@@ -212,11 +212,11 @@ def export_result_without_ortho(shape, regions, result, filename, selected_opi, 
                transform, crs)
 
 
-def cout_trans_diffsimple(O, borders, indices):
-    nb_opis = O.shape[0]
-    img_ref = [np.delete(np.delete(O[o], -1, 0), -1, 1).flatten() for o in range(nb_opis)]
-    # img_col = [np.delete(np.delete(O[o], 0, 0), -1, 1).flatten() for o in range(nb_opis)]
-    # img_lig = [np.delete(np.delete(O[o], 0, 1), -1, 0).flatten() for o in range(nb_opis)]
+def cout_trans_diffsimple(ortho, borders, indices):
+    nb_opis = ortho.shape[0]
+    img_ref = [np.delete(np.delete(ortho[o], -1, 0), -1, 1).flatten() for o in range(nb_opis)]
+    # img_col = [np.delete(np.delete(ortho[o], 0, 0), -1, 1).flatten() for o in range(nb_opis)]
+    # img_lig = [np.delete(np.delete(ortho[o], 0, 1), -1, 0).flatten() for o in range(nb_opis)]
     # nb_edges = len(borders)
     for b in range(len(borders)):
         border = borders[b]
@@ -229,22 +229,22 @@ def cout_trans_diffsimple(O, borders, indices):
         l2 = np.concatenate((border[c2]['col'], border[c2]['lig'])).astype('int64')
         # print(l1, l2)
         # on fait la différence des deux cotes
-        l = np.concatenate((l1, l2)).astype('int64')
-        # print(l)
+        l_total = np.concatenate((l1, l2)).astype('int64')
+        # print(l_total)
         for i in range(nb_opis):
             for j in range(i+1, nb_opis):
-                diff = np.sum(np.absolute(img_ref[i][l].astype('int64')
-                              - img_ref[j][l].astype('int64')))
+                diff = np.sum(np.absolute(img_ref[i][l_total].astype('int64')
+                              - img_ref[j][l_total].astype('int64')))
                 score_trans[indices[i][j]] = diff
         border['cout'] = score_trans
     return borders
 
 
-def cout_trans_diffnorm(O, borders, indices):
-    nb_opis = O.shape[0]
-    img_ref = [np.delete(np.delete(O[o], -1, 0), -1, 1).flatten() for o in range(nb_opis)]
-    img_col = [np.delete(np.delete(O[o], 0, 0), -1, 1).flatten() for o in range(nb_opis)]
-    img_lig = [np.delete(np.delete(O[o], 0, 1), -1, 0).flatten() for o in range(nb_opis)]
+def cout_trans_diffnorm(ortho, borders, indices):
+    nb_opis = ortho.shape[0]
+    img_ref = [np.delete(np.delete(ortho[o], -1, 0), -1, 1).flatten() for o in range(nb_opis)]
+    img_col = [np.delete(np.delete(ortho[o], 0, 0), -1, 1).flatten() for o in range(nb_opis)]
+    img_lig = [np.delete(np.delete(ortho[o], 0, 1), -1, 0).flatten() for o in range(nb_opis)]
     # nb_edges = len(borders)
     for b in range(len(borders)):
         border = borders[b]
@@ -256,12 +256,12 @@ def cout_trans_diffnorm(O, borders, indices):
         list_c1_lig = border[c1]['lig']
         list_c2_lig = border[c2]['lig']
         # on fait la différence des deux cotes
-        l = np.concatenate((np.concatenate((list_c1_col, list_c1_lig)),
-                            np.concatenate((list_c2_col, list_c2_lig)))).astype('int64')
+        l_total = np.concatenate((np.concatenate((list_c1_col, list_c1_lig)),
+                                  np.concatenate((list_c2_col, list_c2_lig)))).astype('int64')
         for i in range(nb_opis):
             for j in range(i+1, nb_opis):
-                diff = np.sum(np.absolute(img_ref[i][l].astype('int64')
-                              - img_ref[j][l].astype('int64')))
+                diff = np.sum(np.absolute(img_ref[i][l_total].astype('int64')
+                              - img_ref[j][l_total].astype('int64')))
                 ct_i = np.sum(np.concatenate((
                     np.concatenate((
                         np.absolute(img_ref[i][list_c1_col].astype('int64')
@@ -292,11 +292,11 @@ def cout_trans_diffnorm(O, borders, indices):
     return borders
 
 
-def cout_trans(O, borders, indices):
-    nb_opis = O.shape[0]
-    img_ref = [np.delete(np.delete(O[o], -1, 0), -1, 1).flatten() for o in range(nb_opis)]
-    img_col = [np.delete(np.delete(O[o], 0, 0), -1, 1).flatten() for o in range(nb_opis)]
-    img_lig = [np.delete(np.delete(O[o], 0, 1), -1, 0).flatten() for o in range(nb_opis)]
+def cout_trans(ortho, borders, indices):
+    nb_opis = ortho.shape[0]
+    img_ref = [np.delete(np.delete(ortho[o], -1, 0), -1, 1).flatten() for o in range(nb_opis)]
+    img_col = [np.delete(np.delete(ortho[o], 0, 0), -1, 1).flatten() for o in range(nb_opis)]
+    img_lig = [np.delete(np.delete(ortho[o], 0, 1), -1, 0).flatten() for o in range(nb_opis)]
     # nb_edges = len(borders)
     for b in range(len(borders)):
         border = borders[b]
@@ -344,30 +344,24 @@ def cout_trans(O, borders, indices):
                 j_lig_c1_lig = img_lig[j][list_c1_lig].astype('int64')
                 j_lig_c2_lig = img_lig[j][list_c2_lig].astype('int64')
 
-                contraste = np.sum(np.maximum(
-                                    np.absolute(i_ref_c1_col - i_col_c1_col),
-                                    np.absolute(j_ref_c1_col - j_col_c1_col))) +\
-                            np.sum(np.maximum(
-                                    np.absolute(i_ref_c1_lig - i_lig_c1_lig),
-                                    np.absolute(j_ref_c1_lig - j_lig_c1_lig))) +\
-                            np.sum(np.maximum(
-                                    np.absolute(i_ref_c2_col - i_col_c2_col),
-                                    np.absolute(j_ref_c2_col - j_col_c2_col))) +\
-                            np.sum(np.maximum(
-                                    np.absolute(i_ref_c2_lig - i_lig_c2_lig),
-                                    np.absolute(j_ref_c2_lig - j_lig_c2_lig)))
-                difference = np.sum(np.minimum(
-                                    np.absolute(i_ref_c1_col - j_ref_c1_col),
-                                    np.absolute(i_col_c1_col - j_col_c1_col))) +\
-                            np.sum(np.minimum(
-                                    np.absolute(i_ref_c1_lig - j_ref_c1_lig),
-                                    np.absolute(i_lig_c1_lig - j_lig_c1_lig))) +\
-                            np.sum(np.minimum(
-                                    np.absolute(i_ref_c2_col - j_ref_c2_col),
-                                    np.absolute(i_col_c2_col - j_col_c2_col))) +\
-                            np.sum(np.minimum(
-                                    np.absolute(i_ref_c2_lig - j_ref_c2_lig),
-                                    np.absolute(i_lig_c2_lig - j_lig_c2_lig)))
+                contraste = \
+                    np.sum(np.maximum(np.absolute(i_ref_c1_col - i_col_c1_col),
+                                      np.absolute(j_ref_c1_col - j_col_c1_col))) +\
+                    np.sum(np.maximum(np.absolute(i_ref_c1_lig - i_lig_c1_lig),
+                                      np.absolute(j_ref_c1_lig - j_lig_c1_lig))) +\
+                    np.sum(np.maximum(np.absolute(i_ref_c2_col - i_col_c2_col),
+                                      np.absolute(j_ref_c2_col - j_col_c2_col))) +\
+                    np.sum(np.maximum(np.absolute(i_ref_c2_lig - i_lig_c2_lig),
+                                      np.absolute(j_ref_c2_lig - j_lig_c2_lig)))
+                difference = \
+                    np.sum(np.minimum(np.absolute(i_ref_c1_col - j_ref_c1_col),
+                                      np.absolute(i_col_c1_col - j_col_c1_col))) +\
+                    np.sum(np.minimum(np.absolute(i_ref_c1_lig - j_ref_c1_lig),
+                                      np.absolute(i_lig_c1_lig - j_lig_c1_lig))) +\
+                    np.sum(np.minimum(np.absolute(i_ref_c2_col - j_ref_c2_col),
+                                      np.absolute(i_col_c2_col - j_col_c2_col))) +\
+                    np.sum(np.minimum(np.absolute(i_ref_c2_lig - j_ref_c2_lig),
+                                      np.absolute(i_lig_c2_lig - j_lig_c2_lig)))
 
                 if contraste > 0.:
                     score_trans[indices[i][j]] = min(1., (difference/contraste))
@@ -539,15 +533,15 @@ def main():
     print('nb opis: ', nb_opis)
     S = S[selected_opi]
 
-    ortho = rasterio.open(args.opis)
-    O = ortho.read(selected_opi.tolist())
+    ortho_io = rasterio.open(args.opis)
+    ortho = ortho_io.read(selected_opi.tolist())
 
-    shape = O[0].shape
+    shape = ortho[0].shape
 
     # creation des super pixels
     print('creation des super-pixels...')
     t1 = timeit.default_timer()
-    regions = super_pixels(O, args.cellsize)
+    regions = super_pixels(ortho, args.cellsize)
     K = None
     if args.constraint:
         print('prise en compte des contraintes pour les super pixels...')
@@ -597,7 +591,7 @@ def main():
     if verbose > 0:
         print("export...")
         t1 = timeit.default_timer()
-        export_result_with_ortho(O, regions, result,
+        export_result_with_ortho(ortho, regions, result,
                                  os.path.splitext(args.outputfile)[0]+"_mos",
                                  None,
                                  ortho.transform,
@@ -609,7 +603,7 @@ def main():
     # selected_opi, result = np.unique(result, return_inverse=True)
     # print('liste des OPI selectionnees : ', selected_opi)
     # nb_opis = len(selected_opi)
-    # O = O[selected_opi]
+    # ortho = ortho[selected_opi]
     # S = S[selected_opi]
     # score_int = score_int[selected_opi]
 
@@ -619,20 +613,20 @@ def main():
     indices = []
     index = 0
     for i in range(nb_opis):
-        I = []
+        indice = []
         for j in range(nb_opis):
             if j <= i:
-                I.append(None)
+                indice.append(None)
             else:
-                I.append(index)
+                indice.append(index)
                 index += 1
-        indices.append(I)
+        indices.append(indice)
     for i in range(nb_opis):
         for j in range(nb_opis):
             if j < i:
                 indices[i][j] = indices[j][i]
-    # borders = cout_trans_diffnorm(O, borders, indices)
-    borders = cout_trans_diffsimple(O, borders, indices)
+    # borders = cout_trans_diffnorm(ortho, borders, indices)
+    borders = cout_trans_diffsimple(ortho, borders, indices)
     t2 = timeit.default_timer()
     print('temps de traitement -- : ', t2-t1, 's')
 
@@ -648,7 +642,7 @@ def main():
     else:
         # on n'a plus besoin des OPI
         if not args.export_ortho:
-            O = None
+            ortho = None
 
     # optimisation
     for coeff_alpha in args.alpha:
@@ -681,11 +675,11 @@ def main():
             # on peut liberer la memoire en purgeant borders
             borders = None
         if args.export_ortho:
-            export_result_with_ortho(O, regions, result, output_name,
-                                     selected_opi, ortho.transform, ortho.crs)
+            export_result_with_ortho(ortho, regions, result, output_name,
+                                     selected_opi, ortho_io.transform, ortho_io.crs)
         else:
             export_result_without_ortho(shape, regions, result, output_name,
-                                        selected_opi, ortho.transform, ortho.crs)
+                                        selected_opi, ortho_io.transform, ortho_io.crs)
         t2 = timeit.default_timer()
         print('temps de traitement -- : ', t2-t1, 's')
 
