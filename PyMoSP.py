@@ -43,6 +43,30 @@ verbose = args.verbose
 if verbose > 0:
     print("Arguments: ", args)
 
+# petite doc sur les déclages en colonne/ligne
+# A = [[ 0  1  2  3  4]
+#      [ 5  6  7  8  9]
+#      [10 11 12 13 14]
+#      [15 16 17 18 19]
+#      [20 21 22 23 24]]
+# A_ref = np.delete(np.delete(A, -1, 0), -1, 1)
+# on supprime la dernière ligne et la dernière colonne
+# array([[ 0,  1,  2,  3],
+#        [ 5,  6,  7,  8],
+#        [10, 11, 12, 13],
+#        [15, 16, 17, 18]])
+# A_col =  np.delete(np.delete(A, 0, 0), -1, 1)
+# on supprime la première ligne et la dernière colonne
+# array([[ 5,  6,  7,  8],
+#        [10, 11, 12, 13],
+#        [15, 16, 17, 18],
+#        [20, 21, 22, 23]])
+# A_lig = np.delete(np.delete(A, 0, 1), -1, 0)
+# on supprime la première colonne et la dernière ligne
+# array([[ 1,  2,  3,  4],
+#        [ 6,  7,  8,  9],
+#        [11, 12, 13, 14],
+#        [16, 17, 18, 19]])
 
 def save_image(data, name, transform=None, crs=None):
     # creation d'une image
@@ -284,7 +308,7 @@ def cout_trans(ortho, borders, indices, transform, crs):
                 long = l_col.shape[0] + l_lig.shape[0]
                 
                 contraste = max(np.sum(diff_col_i[l_col]) + np.sum(diff_lig_i[l_lig]), np.sum(diff_col_j[l_col]) + np.sum(diff_lig_j[l_lig]))
-                difference = max(np.sum(diff_ref[l_col]) + np.sum(diff_ref[l_lig]), np.sum(diff_col[l_col]) + np.sum(diff_lig[l_lig]))
+                difference = min(np.sum(diff_ref[l_col]) + np.sum(diff_ref[l_lig]), np.sum(diff_col[l_col]) + np.sum(diff_lig[l_lig]))
                 # difference = np.sum(diff[l_col])+np.sum(diff[l_lig])
                 
                 if contraste > 0.:
@@ -298,6 +322,15 @@ def cout_trans(ortho, borders, indices, transform, crs):
                 # debug_res[l_col] = score * 255
                 # debug_res[l_lig] = score * 255
                 
+                # if b == 0:
+                #     print(i, j, indices[i][j])
+                #     print(c1, c2)
+                #     print(l_col, l_lig)
+                #     print(diff_col_i[l_col], diff_lig_i[l_lig], diff_col_j[l_col], diff_lig_j[l_lig])
+                #     print(diff_ref[l_col], diff_ref[l_lig], diff_col[l_col], diff_lig[l_lig])
+                #     print(contraste, difference)
+                #     print(score)
+
                 border['cout'][indices[i][j]] = score
             # print(debug_res.shape)
             # debug_res = debug_res.reshape((ortho[i].shape[0]-1, ortho[i].shape[1]-1))
@@ -469,7 +502,9 @@ def main():
     S = S[selected_opi]
 
     ortho_io = rasterio.open(args.opis)
-    ortho = ortho_io.read(selected_opi.tolist())
+    # attention, l'interface rasterio pour les read commence a 1 (pour la bande 0)
+    # il faut donc décaler selected_opi de 1
+    ortho = ortho_io.read((selected_opi+1).tolist())
 
     shape = ortho[0].shape
 
@@ -493,7 +528,7 @@ def main():
     print('temps de traitement -- : ', t2-t1, 's')
     if verbose > 0:
         save_image(np.mod(np.absolute(regions), np.iinfo(np.uint16).max).astype(np.uint16),
-                   os.path.splitext(args.outputfile)[0]+"_sp.tif", ortho.transform, ortho.crs)
+                   os.path.splitext(args.outputfile)[0]+"_sp.tif", ortho_io.transform, ortho_io.crs)
 
     # pour un test
     # pour un test on interdit une zone sur l'une des OPI
@@ -504,6 +539,15 @@ def main():
     inside_indices, borders = build_graph(regions)
     t2 = timeit.default_timer()
     print('temps de traitement -- : ', t2-t1, 's')
+    if verbose > 1:
+        print("export...")
+        t1 = timeit.default_timer()
+        with open(os.path.splitext(args.outputfile)[0]+"_inside_indices.json", "w") as out:
+            json.dump(inside_indices, out)
+        with open(os.path.splitext(args.outputfile)[0]+"_border_indices.json", "w") as out:
+            json.dump(borders, out)
+        t2 = timeit.default_timer()
+        print('temps de traitement -- : ', t2-t1, 's')
 
     nb_nodes = nb_regions
     nb_edges = len(borders)
@@ -529,8 +573,8 @@ def main():
         export_result_with_ortho(ortho, regions, result,
                                  os.path.splitext(args.outputfile)[0]+"_mos",
                                  None,
-                                 ortho.transform,
-                                 ortho.crs)
+                                 ortho_io.transform,
+                                 ortho_io.crs)
         t2 = timeit.default_timer()
         print('temps de traitement -- : ', t2-t1, 's')
 
