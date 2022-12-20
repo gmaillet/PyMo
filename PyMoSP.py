@@ -104,6 +104,39 @@ def super_pixels(ortho, cell_size):
     return regions
 
 
+def super_pixels2(ortho, cell_size):
+    regions = None
+    S = ortho[0].shape
+    nb_regions = ortho.shape[1] * ortho.shape[2] / (cell_size * ortho.shape[0])
+    print(nb_regions)
+    for i in range(ortho.shape[0]):
+        print('opi ', i)
+        gradient_i = np.abs(sobel(ortho[i]))
+        regions_i = watershed(gradient_i,
+                              markers=nb_regions,
+                              compactness=0.001)
+        regions_i = np.unique(regions_i, return_inverse=True)[1].reshape(S)
+        if regions is None:
+            regions = regions_i
+        else:
+            regions = join_segmentations(regions, regions_i)
+    uniques, inverses, counts = np.unique(regions,
+                                          return_inverse=True,
+                                          return_counts=True)
+    # on filtre les labels avec peu de pixels
+    uniques[counts < math.sqrt(cell_size)] = 0
+    # on applique le filtrage
+    S = regions.shape
+    regions = uniques[inverses].reshape(S)
+    # on comble le noir avec des labels neighbors
+    while np.sum(regions < 1) > 0:
+        regions = regions + dilation(regions) * (regions < 1)
+    # on re-index les labels
+    regions = np.unique(regions, return_inverse=True)[1].reshape(S)
+    gradient = None
+    return regions
+
+
 def build_graph(cells):
     # dictionnaire des voisinages (contient la liste des neighbors pour region)
     neighbors = {}
@@ -316,6 +349,79 @@ def cout_trans(ortho, borders, indices, transform, crs):
                 else:
                     score = min(1., difference) * long
 
+                # print(diff_col_i[l_col], diff_lig_i[l_lig], diff_col_j[l_col], diff_lig_j[l_lig], diff_ref[l_col], diff_ref[l_lig], diff_col[l_col], diff_lig[l_lig])
+                # print(contraste, difference, score)
+
+                # debug_res[l_col] = score * 255
+                # debug_res[l_lig] = score * 255
+                
+                # if b == 0:
+                #     print(i, j, indices[i][j])
+                #     print(c1, c2)
+                #     print(l_col, l_lig)
+                #     print(diff_col_i[l_col], diff_lig_i[l_lig], diff_col_j[l_col], diff_lig_j[l_lig])
+                #     print(diff_ref[l_col], diff_ref[l_lig], diff_col[l_col], diff_lig[l_lig])
+                #     print(contraste, difference)
+                #     print(score)
+
+                border['cout'][indices[i][j]] = score
+            # print(debug_res.shape)
+            # debug_res = debug_res.reshape((ortho[i].shape[0]-1, ortho[i].shape[1]-1))
+            # print(debug_res.shape)
+            # save_image(debug_res, "debug_"+str(i)+"_"+str(j)+".tif", transform, crs)
+    return borders
+
+
+def cout_trans_v2(ortho, borders, indices, transform, crs):
+    nb_opis = ortho.shape[0]
+    for b in range(len(borders)):
+        borders[b]['cout'] = np.zeros(indices[-1][-2] + 1)
+    for i in range(nb_opis):
+        for j in range(i+1, nb_opis):
+            # diff = np.absolute(np.delete(np.delete(ortho[i], -1, 0), -1, 1).flatten().astype('int64')
+            #                    - np.delete(np.delete(ortho[j], -1, 0), -1, 1).flatten().astype('int64'))
+            ortho_i_ref = np.delete(np.delete(ortho[i], -1, 0), -1, 1).flatten().astype('int64')
+            ortho_i_col = np.delete(np.delete(ortho[i], 0, 0), -1, 1).flatten().astype('int64')
+            ortho_i_lig = np.delete(np.delete(ortho[i], 0, 1), -1, 0).flatten().astype('int64')
+
+            ortho_j_ref = np.delete(np.delete(ortho[j], -1, 0), -1, 1).flatten().astype('int64')
+            ortho_j_col = np.delete(np.delete(ortho[j], 0, 0), -1, 1).flatten().astype('int64')
+            ortho_j_lig = np.delete(np.delete(ortho[j], 0, 1), -1, 0).flatten().astype('int64')
+
+            diff_col_i = np.absolute(ortho_i_ref - ortho_i_col)
+            diff_lig_i = np.absolute(ortho_i_ref - ortho_i_lig)
+            diff_col_j = np.absolute(ortho_j_ref - ortho_j_col)
+            diff_lig_j = np.absolute(ortho_j_ref - ortho_j_lig)
+
+            diff_ref = np.absolute(ortho_i_ref - ortho_j_ref)
+            diff_col = np.absolute(ortho_i_col - ortho_j_col)
+            diff_lig = np.absolute(ortho_i_lig - ortho_j_lig)
+
+            ortho_i_ref = None
+            ortho_i_col = None
+            ortho_i_lig = None
+
+            ortho_j_ref = None
+            ortho_j_col = None
+            ortho_j_lig = None
+
+            # debug_res = np.zeros((ortho[i].shape[0]-1, ortho[i].shape[1]-1)).flatten()
+            
+            for b in range(len(borders)):
+                border = borders[b]
+                c1 = border['ids'][0]
+                c2 = border['ids'][1]
+
+                l_col = np.concatenate((border[c1]['col'], border[c2]['col'])).astype('int64')
+                l_lig = np.concatenate((border[c1]['lig'], border[c2]['lig'])).astype('int64')
+                # long = l_col.shape[0] + l_lig.shape[0]
+                
+                difference = np.minimum(np.concatenate((diff_ref[l_col], diff_ref[l_lig])),
+                                        np.concatenate((diff_col[l_col], diff_lig[l_lig])))
+                contraste = np.maximum(np.maximum(np.concatenate((diff_col_i[l_col], diff_lig_i[l_lig])),
+                                                  np.concatenate((diff_col_j[l_col], diff_lig_j[l_lig]))) ,1)
+                score = np.sum(np.divide(difference, contraste))
+                
                 # print(diff_col_i[l_col], diff_lig_i[l_lig], diff_col_j[l_col], diff_lig_j[l_lig], diff_ref[l_col], diff_ref[l_lig], diff_col[l_col], diff_lig[l_lig])
                 # print(contraste, difference, score)
 
@@ -604,7 +710,7 @@ def main():
         for j in range(nb_opis):
             if j < i:
                 indices[i][j] = indices[j][i]
-    borders = cout_trans(ortho, borders, indices, ortho_io.transform, ortho_io.crs)
+    borders = cout_trans_v2(ortho, borders, indices, ortho_io.transform, ortho_io.crs)
     # borders = cout_trans_diffsimple(ortho, borders, indices)
     t2 = timeit.default_timer()
     print('temps de traitement -- : ', t2-t1, 's')
