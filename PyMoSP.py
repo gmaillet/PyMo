@@ -420,7 +420,7 @@ def cout_trans_v2(ortho, borders, indices, transform, crs):
                                         np.concatenate((diff_col[l_col], diff_lig[l_lig])))
                 contraste = np.maximum(np.maximum(np.concatenate((diff_col_i[l_col], diff_lig_i[l_lig])),
                                                   np.concatenate((diff_col_j[l_col], diff_lig_j[l_lig]))) ,1)
-                score = np.sum(np.divide(difference, contraste))
+                score = np.sum(np.minimum(1, np.divide(difference, contraste)))
                 
                 # print(diff_col_i[l_col], diff_lig_i[l_lig], diff_col_j[l_col], diff_lig_j[l_lig], diff_ref[l_col], diff_ref[l_lig], diff_col[l_col], diff_lig[l_lig])
                 # print(contraste, difference, score)
