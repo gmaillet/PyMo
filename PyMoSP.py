@@ -269,33 +269,6 @@ def export_result_without_ortho(shape, regions, result, filename, selected_opi, 
                transform, crs)
 
 
-def cout_trans_diffsimple(ortho, borders, indices):
-    nb_opis = ortho.shape[0]
-    img_ref = [np.delete(np.delete(ortho[o], -1, 0), -1, 1).flatten() for o in range(nb_opis)]
-    # img_col = [np.delete(np.delete(ortho[o], 0, 0), -1, 1).flatten() for o in range(nb_opis)]
-    # img_lig = [np.delete(np.delete(ortho[o], 0, 1), -1, 0).flatten() for o in range(nb_opis)]
-    # nb_edges = len(borders)
-    for b in range(len(borders)):
-        border = borders[b]
-        c1 = border['ids'][0]
-        c2 = border['ids'][1]
-        score_trans = np.zeros(indices[-1][-2] + 1)
-        # liste des pixels du cote c1 en colonne et en ligne
-        l1 = np.concatenate((border[c1]['col'], border[c1]['lig'])).astype('int64')
-        # liste des pixels du cote c2 en colonne et en ligne
-        l2 = np.concatenate((border[c2]['col'], border[c2]['lig'])).astype('int64')
-        # print(l1, l2)
-        # on fait la différence des deux cotes
-        l_total = np.concatenate((l1, l2)).astype('int64')
-        # print(l_total)
-        for i in range(nb_opis):
-            for j in range(i+1, nb_opis):
-                diff = np.sum(np.absolute(img_ref[i][l_total].astype('int64')
-                              - img_ref[j][l_total].astype('int64')))
-                score_trans[indices[i][j]] = diff
-        border['cout'] = score_trans
-    return borders
-
 def cout_trans(ortho, borders, indices, transform, crs):
     nb_opis = ortho.shape[0]
     for b in range(len(borders)):
@@ -327,86 +300,7 @@ def cout_trans(ortho, borders, indices, transform, crs):
 
             ortho_j_ref = None
             ortho_j_col = None
-            ortho_j_lig = None
-
-            # debug_res = np.zeros((ortho[i].shape[0]-1, ortho[i].shape[1]-1)).flatten()
-            
-            for b in range(len(borders)):
-                border = borders[b]
-                c1 = border['ids'][0]
-                c2 = border['ids'][1]
-
-                l_col = np.concatenate((border[c1]['col'], border[c2]['col'])).astype('int64')
-                l_lig = np.concatenate((border[c1]['lig'], border[c2]['lig'])).astype('int64')
-                long = l_col.shape[0] + l_lig.shape[0]
-                
-                contraste = max(np.sum(diff_col_i[l_col]) + np.sum(diff_lig_i[l_lig]), np.sum(diff_col_j[l_col]) + np.sum(diff_lig_j[l_lig]))
-                difference = min(np.sum(diff_ref[l_col]) + np.sum(diff_ref[l_lig]), np.sum(diff_col[l_col]) + np.sum(diff_lig[l_lig]))
-                # difference = np.sum(diff[l_col])+np.sum(diff[l_lig])
-                
-                if contraste > 0.:
-                    score = min(1., (difference/contraste)) * long
-                else:
-                    score = min(1., difference) * long
-
-                # print(diff_col_i[l_col], diff_lig_i[l_lig], diff_col_j[l_col], diff_lig_j[l_lig], diff_ref[l_col], diff_ref[l_lig], diff_col[l_col], diff_lig[l_lig])
-                # print(contraste, difference, score)
-
-                # debug_res[l_col] = score * 255
-                # debug_res[l_lig] = score * 255
-                
-                # if b == 0:
-                #     print(i, j, indices[i][j])
-                #     print(c1, c2)
-                #     print(l_col, l_lig)
-                #     print(diff_col_i[l_col], diff_lig_i[l_lig], diff_col_j[l_col], diff_lig_j[l_lig])
-                #     print(diff_ref[l_col], diff_ref[l_lig], diff_col[l_col], diff_lig[l_lig])
-                #     print(contraste, difference)
-                #     print(score)
-
-                border['cout'][indices[i][j]] = score
-            # print(debug_res.shape)
-            # debug_res = debug_res.reshape((ortho[i].shape[0]-1, ortho[i].shape[1]-1))
-            # print(debug_res.shape)
-            # save_image(debug_res, "debug_"+str(i)+"_"+str(j)+".tif", transform, crs)
-    return borders
-
-
-def cout_trans_v2(ortho, borders, indices, transform, crs):
-    nb_opis = ortho.shape[0]
-    for b in range(len(borders)):
-        borders[b]['cout'] = np.zeros(indices[-1][-2] + 1)
-    for i in range(nb_opis):
-        for j in range(i+1, nb_opis):
-            # diff = np.absolute(np.delete(np.delete(ortho[i], -1, 0), -1, 1).flatten().astype('int64')
-            #                    - np.delete(np.delete(ortho[j], -1, 0), -1, 1).flatten().astype('int64'))
-            ortho_i_ref = np.delete(np.delete(ortho[i], -1, 0), -1, 1).flatten().astype('int64')
-            ortho_i_col = np.delete(np.delete(ortho[i], 0, 0), -1, 1).flatten().astype('int64')
-            ortho_i_lig = np.delete(np.delete(ortho[i], 0, 1), -1, 0).flatten().astype('int64')
-
-            ortho_j_ref = np.delete(np.delete(ortho[j], -1, 0), -1, 1).flatten().astype('int64')
-            ortho_j_col = np.delete(np.delete(ortho[j], 0, 0), -1, 1).flatten().astype('int64')
-            ortho_j_lig = np.delete(np.delete(ortho[j], 0, 1), -1, 0).flatten().astype('int64')
-
-            diff_col_i = np.absolute(ortho_i_ref - ortho_i_col)
-            diff_lig_i = np.absolute(ortho_i_ref - ortho_i_lig)
-            diff_col_j = np.absolute(ortho_j_ref - ortho_j_col)
-            diff_lig_j = np.absolute(ortho_j_ref - ortho_j_lig)
-
-            diff_ref = np.absolute(ortho_i_ref - ortho_j_ref)
-            diff_col = np.absolute(ortho_i_col - ortho_j_col)
-            diff_lig = np.absolute(ortho_i_lig - ortho_j_lig)
-
-            ortho_i_ref = None
-            ortho_i_col = None
-            ortho_i_lig = None
-
-            ortho_j_ref = None
-            ortho_j_col = None
-            ortho_j_lig = None
-
-            # debug_res = np.zeros((ortho[i].shape[0]-1, ortho[i].shape[1]-1)).flatten()
-            
+            ortho_j_lig = None            
             for b in range(len(borders)):
                 border = borders[b]
                 c1 = border['ids'][0]
@@ -421,27 +315,8 @@ def cout_trans_v2(ortho, borders, indices, transform, crs):
                 contraste = np.maximum(np.maximum(np.concatenate((diff_col_i[l_col], diff_lig_i[l_lig])),
                                                   np.concatenate((diff_col_j[l_col], diff_lig_j[l_lig]))) ,1)
                 score = np.sum(np.minimum(1, np.divide(difference, contraste)))
-                
-                # print(diff_col_i[l_col], diff_lig_i[l_lig], diff_col_j[l_col], diff_lig_j[l_lig], diff_ref[l_col], diff_ref[l_lig], diff_col[l_col], diff_lig[l_lig])
-                # print(contraste, difference, score)
-
-                # debug_res[l_col] = score * 255
-                # debug_res[l_lig] = score * 255
-                
-                # if b == 0:
-                #     print(i, j, indices[i][j])
-                #     print(c1, c2)
-                #     print(l_col, l_lig)
-                #     print(diff_col_i[l_col], diff_lig_i[l_lig], diff_col_j[l_col], diff_lig_j[l_lig])
-                #     print(diff_ref[l_col], diff_ref[l_lig], diff_col[l_col], diff_lig[l_lig])
-                #     print(contraste, difference)
-                #     print(score)
 
                 border['cout'][indices[i][j]] = score
-            # print(debug_res.shape)
-            # debug_res = debug_res.reshape((ortho[i].shape[0]-1, ortho[i].shape[1]-1))
-            # print(debug_res.shape)
-            # save_image(debug_res, "debug_"+str(i)+"_"+str(j)+".tif", transform, crs)
     return borders
 
 
@@ -710,8 +585,7 @@ def main():
         for j in range(nb_opis):
             if j < i:
                 indices[i][j] = indices[j][i]
-    borders = cout_trans_v2(ortho, borders, indices, ortho_io.transform, ortho_io.crs)
-    # borders = cout_trans_diffsimple(ortho, borders, indices)
+    borders = cout_trans(ortho, borders, indices, ortho_io.transform, ortho_io.crs)
     t2 = timeit.default_timer()
     print('temps de traitement -- : ', t2-t1, 's')
 
